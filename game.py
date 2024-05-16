@@ -2,6 +2,7 @@ import tkinter as tk
 import random
 from tkinter import PhotoImage, messagebox
 from PIL import Image, ImageTk
+import sys 
 
 def load_image(path, size=(30, 30)):  # Adjust to the size that looks good for your images
     img = Image.open(path)
@@ -14,14 +15,17 @@ def create_transparent_image(size):
     return ImageTk.PhotoImage(transparent_image)
 # In your Minesweeper class
 
+can_continue = True
+
 class Cell:
     number_colors = ["blue", "green", "red", "purple", "turquoise", "black", "gray"]
 
-    def __init__(self, master, x, y, mine_image, flag_image, transparent_image):
+    def __init__(self, master, minesweeper, x, y, mine_image, flag_image, transparent_image):
         # Create a frame with a fixed size
         self.frame = tk.Frame(master, width=30, height=30)  # Set your desired size in pixels
         self.frame.pack_propagate(False)  # Prevent the frame from resizing to fit its contents
         self.frame.grid(row=x, column=y)
+        self.minesweeper = minesweeper
         self.master = master
         self.mine_image = mine_image
         self.flag_image = flag_image
@@ -40,24 +44,30 @@ class Cell:
         self.button.bind("<Button-3>", self.flag)    # Right click
 
     def reveal(self, event=None):
-        if not self.is_flagged:
-            if self.is_mine:
-                self.button.config(image=self.mine_image)
-                self.is_revealed = True
-                messagebox.showinfo("Game Over", "Boom! You hit a mine.")
-                # self.create_custom_messagebox("Game Over! You hit a mine.")
-            else:
-                count = self.count_adjacent_mines()
-                self.button.config(image=self.transparent_image, text=str(count) if count > 0 else "", compound = 'center', fg=Cell.number_colors[count])
-                if count == 0:
-                    to_reveal = self.reveal_neighbours()
-                    for point in to_reveal:
-                        p_count = point.count_adjacent_mines()
-                        if p_count > 0:
-                            point.button.config(image=self.transparent_image, text=str(p_count), compound = 'center', fg=Cell.number_colors[p_count])
-                        else:
-                            point.button.config(image=self.transparent_image, text="", compound = 'center', bg="white")
-
+        global can_continue
+        if can_continue:
+            if not self.is_flagged:
+                if self.is_mine:
+                    self.button.config(image=self.mine_image)
+                    self.is_revealed = True
+                    messagebox.showinfo("Game Over", "Boom! You hit a mine.")
+                    can_continue = False
+                    # self.create_custom_messagebox("Game Over! You hit a mine.")
+                else:
+                    count = self.count_adjacent_mines()
+                    self.button.config(image=self.transparent_image, text=str(count) if count > 0 else "", compound = 'center', fg=Cell.number_colors[count])
+                    if count == 0:
+                        to_reveal = self.reveal_neighbours()
+                        for point in to_reveal:
+                            p_count = point.count_adjacent_mines()
+                            point.is_revealed = True
+                            if p_count > 0:
+                                point.button.config(image=self.transparent_image, text=str(p_count), compound = 'center', fg=Cell.number_colors[p_count])
+                            else:
+                                point.button.config(image=self.transparent_image, text="", compound = 'center', bg="white")
+                    self.is_revealed = True
+            if self.minesweeper.check_win():
+                messagebox.showinfo("Congratulations!", "You have cleared all mines!")
     
     def reveal_neighbours(self):
         # flood-fill
@@ -131,7 +141,7 @@ class Cell:
         return message_frame
 
 class Minesweeper:
-    def __init__(self, master, rows=10, columns=10, mine_count=25):
+    def __init__(self, master, rows=10, columns=10, mine_count=2):
         self.master = master
         self.rows = rows
         self.columns = columns
@@ -143,7 +153,7 @@ class Minesweeper:
         self.setup_game()
 
     def setup_game(self):
-        self.cells = [[Cell(self.master, x, y, self.mine_image, self.flag_image, self.transparent_image) for y in range(self.columns)] for x in range(self.rows)]
+        self.cells = [[Cell(self.master, self, x, y, self.mine_image, self.flag_image, self.transparent_image) for y in range(self.columns)] for x in range(self.rows)]
         for row in self.cells:
             for cell in row:
                 cell.set_neighbors(self.cells)
@@ -159,14 +169,32 @@ class Minesweeper:
     def reset_game(self):
         self.cells.clear()
         self.setup_game()
+        global can_continue
+        can_continue = True
+
+    def check_win(self):
+        # Check if all non-mine cells are revealed
+        for row in self.cells:
+            for cell in row:
+                if not cell.is_mine and not cell.is_revealed:
+                    return False  # Found a non-mine cell that is not revealed
+
+        # Optional: Check if all mines are correctly flagged
+        # for row in self.cells:
+        #     for cell in row:
+        #         if cell.is_mine != cell.is_flagged:
+        #             return False  # Found a discrepancy in flagging
+
+        # If all conditions are met
+        return True  # Player wins
                 
 
-def main():
+
+if __name__ == "__main__":
     root = tk.Tk()
     game_frame = tk.Frame(root)
     game_frame.pack(side='top')  # This frame will contain the Minesweeper grid
-
-    game = Minesweeper(game_frame)  # Pass the frame to Minesweeper instead of root
+    game = Minesweeper(game_frame, mine_count=int(sys.argv[1]))  # Pass the frame to Minesweeper instead of root
 
     control_frame = tk.Frame(root)
     control_frame.pack(side='bottom')  # This frame will contain the control buttons
@@ -175,6 +203,3 @@ def main():
     reset_button.pack()  # Use pack within the control frame
 
     root.mainloop()
-
-if __name__ == "__main__":
-    main()
